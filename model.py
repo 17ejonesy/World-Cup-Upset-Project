@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.metrics import roc_auc_score, accuracy_score
 from statsmodels.stats.proportion import proportions_ztest
 import matplotlib.pyplot as plt
 
@@ -28,6 +30,20 @@ print("\nLogistic regression coefficients:")
 for name, coef in zip(["rank_gap", "is_knockout", "is_2026"], model.coef_[0]):
     print(f"  {name}: {coef:.4f}")
 print(f"  intercept: {model.intercept_[0]:.4f}")
+
+# Out-of-sample evaluation: 5-fold stratified cross-validation, repeated over 20 shuffles
+aucs, accs = [], []
+for seed in range(20):
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+    probs = cross_val_predict(LogisticRegression(), X, y, cv=cv, method="predict_proba")[:, 1]
+    aucs.append(roc_auc_score(y, probs))
+    accs.append(accuracy_score(y, probs >= 0.5))
+baseline = 1 - y.mean()
+print("\nCross-validated performance (5-fold, 20 repeats):")
+print(f"  AUC: {np.mean(aucs):.3f} (random guessing = 0.500)")
+print(f"  Accuracy: {np.mean(accs):.1%} vs. {baseline:.1%} for always predicting 'no upset'")
+print("  Accuracy matches the baseline because upsets are a minority class;")
+print("  AUC is the more informative metric here.")
 
 decisive["gap_bucket"] = pd.cut(decisive["rank_gap"], bins=[0,10,25,50,100,300],
                                  labels=["0-10","10-25","25-50","50-100","100+"])
